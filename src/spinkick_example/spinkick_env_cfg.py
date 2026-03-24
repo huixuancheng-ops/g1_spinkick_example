@@ -39,4 +39,7 @@ def unitree_g1_spinkick_runner_cfg():
 
   cfg = unitree_g1_tracking_ppo_runner_cfg()
   cfg.experiment_name = "g1_spinkick"
+  cfg.actor.hidden_dims = [128, 64]
+  cfg.actor.obs_normalization = False
+  cfg.critic.obs_normalization = False
   return cfg
