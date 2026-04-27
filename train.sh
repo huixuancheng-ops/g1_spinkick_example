@@ -8,10 +8,10 @@ CRITIC_DIMS="512,256,128"
 # Training settings
 NUM_ENVS=4096
 MAX_ITER=4200
-GPU_ID=3
+GPU_ID=4
 EXP_NAME="g1_spinkick_sweep_no_norm"
 
-for SEED in $(seq 0 249); do
+for SEED in 243 682 683; do
   echo "=== Training with seed $SEED ==="
   MUJOCO_GL=egl CUDA_VISIBLE_DEVICES=$GPU_ID uv run train \
       Mjlab-Spinkick-Unitree-G1 \
