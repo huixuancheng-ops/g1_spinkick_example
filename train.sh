@@ -9,9 +9,9 @@ CRITIC_DIMS="512,256,128"
 NUM_ENVS=4096
 MAX_ITER=4200
 GPU_ID=4
-EXP_NAME="g1_spinkick_sweep_no_norm"
+EXP_NAME="g1_spinkick_sweep_no_norm_new"
 
-for SEED in 243 682 683; do
+for SEED in $(seq 0 99); do
   echo "=== Training with seed $SEED ==="
   MUJOCO_GL=egl CUDA_VISIBLE_DEVICES=$GPU_ID uv run train \
       Mjlab-Spinkick-Unitree-G1 \
@@ -27,5 +27,5 @@ for SEED in 243 682 683; do
       --agent.actor.obs-normalization False \
       --agent.critic.obs-normalization False \
       --env.commands.motion.sampling-mode uniform \
-      --agent.dense-save-iterations 3500,3600,3700,3800,3900,4000,4100,4199
+      --agent.dense-save-iterations 3800,3900,4000,4100,4200,4300,4400,4499
 done

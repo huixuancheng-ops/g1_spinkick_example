@@ -84,11 +84,26 @@ IFS=$'\n' samples=($(printf '%s\n' "${samples[@]}" | sort -t_ -k2 -n))
 unset IFS
 
 found_total=${#samples[@]}
-if (( MAX_SAMPLES > 0 && MAX_SAMPLES < found_total )); then
+
+# Filter out samples already evaluated (their JSON exists in OUT_SUBDIR).
+pending=()
+already_done=0
+for ckpt in "${samples[@]}"; do
+  name=$(basename "$ckpt" .pt)
+  if [[ -f "${OUT_SUBDIR}/${name}.json" ]]; then
+    already_done=$((already_done + 1))
+  else
+    pending+=( "$ckpt" )
+  fi
+done
+samples=( "${pending[@]}" )
+pending_total=${#samples[@]}
+
+if (( MAX_SAMPLES > 0 && MAX_SAMPLES < pending_total )); then
   samples=( "${samples[@]:0:$MAX_SAMPLES}" )
-  echo "[eval] Found $found_total samples, limiting to first $MAX_SAMPLES."
+  echo "[eval] Found $found_total samples ($already_done already done), evaluating next $MAX_SAMPLES of $pending_total pending."
 else
-  echo "[eval] Found $found_total samples in $SAMPLE_DIR"
+  echo "[eval] Found $found_total samples ($already_done already done), evaluating $pending_total pending."
 fi
 echo "[eval] Writing results to $OUT_SUBDIR"
 
