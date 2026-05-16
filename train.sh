@@ -7,8 +7,8 @@ CRITIC_DIMS="512,256,128"
 
 # Training settings
 NUM_ENVS=4096
-MAX_ITER=4200
-GPU_ID=4
+MAX_ITER=4500
+GPU_ID=5
 EXP_NAME="g1_spinkick_sweep_no_norm_new"
 
 for SEED in $(seq 0 99); do
