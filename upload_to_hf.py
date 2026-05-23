@@ -7,13 +7,15 @@ and uploads only the iterations listed in REQUIRED_ITERS.
 import argparse
 import re
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 
 from huggingface_hub import CommitOperationAdd, HfApi, create_repo
+from huggingface_hub.errors import HfHubHTTPError
 
-SOURCE = Path("logs/rsl_rl/g1_spinkick_sweep_no_norm")
-REQUIRED_ITERS = (3500, 3600, 3700, 3800, 3900, 4000, 4100, 4199)
+SOURCE = Path("logs/rsl_rl/g1_spinkick_sweep_no_norm_new")
+REQUIRED_ITERS = (3800, 3900, 4000, 4100, 4200, 4300, 4400, 4499)
 SEED_DIR_RE = re.compile(
   r"^(?P<ts>\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_seed_(?P<seed>\d+)$"
 )
@@ -36,6 +38,35 @@ def find_complete_dirs(root: Path) -> dict[int, Path]:
   return {seed: max(entries)[1] for seed, entries in by_seed.items()}
 
 
+def commit_with_retry(api, repo_id, batch, idx, message):
+  """Commit a batch with backoff on rate limit / transient network errors."""
+  backoff = 30
+  while True:
+    try:
+      api.create_commit(
+        repo_id=repo_id,
+        repo_type="dataset",
+        operations=batch,
+        commit_message=message,
+      )
+      return
+    except HfHubHTTPError as e:
+      code = e.response.status_code if e.response is not None else None
+      if code == 429:
+        print(f"  [batch {idx}] rate limited (429), sleeping 15min...")
+        time.sleep(15 * 60)
+      elif code is not None and 500 <= code < 600:
+        print(f"  [batch {idx}] server error {code}, sleeping {backoff}s...")
+        time.sleep(backoff)
+        backoff = min(backoff * 2, 600)
+      else:
+        raise
+    except (ConnectionError, TimeoutError, OSError) as e:
+      print(f"  [batch {idx}] network error ({e}), sleeping {backoff}s...")
+      time.sleep(backoff)
+      backoff = min(backoff * 2, 600)
+
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument(
@@ -45,7 +76,7 @@ def main():
   )
   parser.add_argument(
     "--subfolder",
-    default="spinkick",
+    default="spinkick_new",
     help="Subfolder inside the repo for these checkpoints",
   )
   parser.add_argument(
@@ -88,31 +119,43 @@ def main():
   api = HfApi()
   create_repo(args.repo_id, repo_type="dataset", private=args.private, exist_ok=True)
 
+  existing = set(api.list_repo_files(args.repo_id, repo_type="dataset"))
+  print(f"  {len(existing)} files already on HF, will skip duplicates.")
+
   operations: list[CommitOperationAdd] = []
   for seed in sorted(complete):
     src_dir = complete[seed]
     for it in REQUIRED_ITERS:
+      path_in_repo = f"{prefix}seed_{seed}_model_{it}.pt"
+      if path_in_repo in existing:
+        continue
       operations.append(
         CommitOperationAdd(
-          path_in_repo=f"{prefix}seed_{seed}_model_{it}.pt",
+          path_in_repo=path_in_repo,
           path_or_fileobj=str(src_dir / f"model_{it}.pt"),
         )
       )
 
+  total = len(operations)
+  print(f"  Remaining to upload: {total} files.")
+  if total == 0:
+    print("Nothing to upload.")
+    return
+
+  n_batches = (total + args.batch_size - 1) // args.batch_size
   done = 0
-  for i in range(0, len(operations), args.batch_size):
+  for i in range(0, total, args.batch_size):
     batch = operations[i : i + args.batch_size]
-    api.create_commit(
-      repo_id=args.repo_id,
-      repo_type="dataset",
-      operations=batch,
-      commit_message=f"Upload checkpoints batch {i // args.batch_size + 1}",
+    idx = i // args.batch_size + 1
+    commit_with_retry(
+      api,
+      args.repo_id,
+      batch,
+      idx,
+      f"Upload spinkick ckpts batch {idx}/{n_batches}",
     )
     done += len(batch)
-    print(
-      f"  [{done}/{total_files}] committed batch "
-      f"{i // args.batch_size + 1}/{(total_files + args.batch_size - 1) // args.batch_size}"
-    )
+    print(f"  [{done}/{total}] committed batch {idx}/{n_batches}")
 
   print(f"Done. Dataset: https://huggingface.co/datasets/{args.repo_id}")
 
