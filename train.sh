@@ -11,7 +11,7 @@ MAX_ITER=4500
 GPU_ID=5
 EXP_NAME="g1_spinkick_sweep_no_norm_new"
 
-for SEED in $(seq 0 99); do
+for SEED in $(seq 574 599); do
   echo "=== Training with seed $SEED ==="
   MUJOCO_GL=egl CUDA_VISIBLE_DEVICES=$GPU_ID uv run train \
       Mjlab-Spinkick-Unitree-G1 \
